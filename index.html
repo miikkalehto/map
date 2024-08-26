@@ -62,6 +62,11 @@
             document.getElementById("geo-text").innerHTML = "tracking stopped";
             document.getElementById("geo-start").disabled = false; // enable start button
             document.getElementById("geo-stop").disabled = true; // disable stop button
+            // if marker exists, remove it
+            if (userMarker) {
+                map.removeLayer(userMarker);
+                map.removeLayer(userCircle);
+            }
         }
         
         // launched when position is fetched successfully
@@ -86,7 +91,7 @@
             // set map view to marker
             map.setView([lat, lng]);
             // print coordinates, accuracy and time
-            document.getElementById("geo-text").innerHTML = "latitude: " + String(lat) + "<br>longitude: " + String(lng) + "<br>accuracy: " + String(accuracy) + " m<br>" + time.toString().split(' (')[0];
+            document.getElementById("geo-text").innerHTML = "lat: " + String(lat) + "<br>lng: " + String(lng) + "<br>accuracy: " + String(+accuracy.toFixed(2)) + " m<br>" + time.toString().split(' (')[0];
         }
         // launched when position cannot be fetched
         function error(error) {
