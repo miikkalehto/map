@@ -24,6 +24,11 @@
                 <input type="button" id="audio-stop" value="stop listening" onclick="stopListening()" disabled>
             </div>
             <p id="audio-text"></p>
+            <div class="options">
+                <input type="button" id="reverb-enable" value="enable reverb" onclick="enableReverb()">
+                <input type="button" id="reverb-disable" value="disable reverb" onclick="disableReverb()" disabled>
+            </div>
+            <p id="reverb-text"></p>
         </main>
         <footer>
             
@@ -110,39 +115,79 @@
 
         // TESTING Web Audio API
 
-        let audioContext = null; // audio context variable
+        let audioContext = new AudioContext(); // audio context variable
+        let reverb = audioContext.createConvolver(); // reverb (convolver)
+        let reverb_enabled = false; // reverb state flag
         let stream = null; // user media audio stream
         let source = null; // audio source variable
 
+        loadReverb(); // load impulse response file
+
         // start listening to user's microphone
         async function startListening() {
-            // if audio context hasn't been created, create new audio context
-            if (audioContext == null) {
-                audioContext = new AudioContext();
-            }
             try {
                 // get user device audio
                 stream = await navigator.mediaDevices.getUserMedia({audio: true});
                 // set device audio as audio context's source
                 source = audioContext.createMediaStreamSource(stream);
-                // connect source to audio context's destination (output)
-                source.connect(audioContext.destination);
+                // connect source to destination or reverb
+                if (!reverb_enabled) {
+                    source.connect(audioContext.destination);
+                } else {
+                    source.connect(reverb);
+                }
                 document.getElementById("audio-text").innerHTML = "listening started";
                 document.getElementById("audio-stop").disabled = false; // enable stop button
                 document.getElementById("audio-start").disabled = true; // disable start button
-
             } catch (error) {
                 document.getElementById("audio-text").innerHTML = error;
             }
-            
         }
+
         // stop listening to user's microphone
         function stopListening() {
-            audioContext.close();
-            audioContext = null;
+            if (reverb_enabled) {
+                source.disconnect(reverb);
+            } else {
+                source.disconnect(audioContext.destination);
+            }
+            source = null;
             document.getElementById("audio-text").innerHTML = "listening stopped";
             document.getElementById("audio-start").disabled = false; // enable start button
-                document.getElementById("audio-stop").disabled = true; // disable stop button
+            document.getElementById("audio-stop").disabled = true; // disable stop button
+        }
+
+        // load impulse response file
+        async function loadReverb() {
+            let response = await fetch("./res/audio/ir-test.wav");
+            let arraybuffer = await response.arrayBuffer();
+            reverb.buffer = await audioContext.decodeAudioData(arraybuffer);
+        }
+        
+        // connect reverb between source and destination
+        function enableReverb() {
+            document.getElementById("reverb-text").innerHTML = "enabling reverb...";
+            if (source != null) {
+                source.disconnect(audioContext.destination);
+                source.connect(reverb);
+            }
+            reverb.connect(audioContext.destination);
+            document.getElementById("reverb-text").innerHTML = "reverb enabled";
+            document.getElementById("reverb-enable").disabled = true;
+            document.getElementById("reverb-disable").disabled = false;
+            reverb_enabled = true;
+        }
+
+        function disableReverb() {
+            reverb.disconnect(audioContext.destination);
+            if (source != null) {
+                source.disconnect(reverb);
+                source.connect(audioContext.destination);
+            }
+            document.getElementById("reverb-text").innerHTML = "reverb disabled";
+            document.getElementById("reverb-enable").disabled = false;
+            document.getElementById("reverb-disable").disabled = true;
+            reverb_enabled = false;
         }
         
         // TESTING map objects
