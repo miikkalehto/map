@@ -15,20 +15,34 @@
             <h1>map</h1>
             <div id="map"></div>
             <div class="options">
-                <input type="button" id="geo-start" value="start tracking" onclick="startTracking()">
-                <input type="button" id="geo-stop" value="stop tracking" onclick="stopTracking()" disabled>
+                <input type="button" id="geo-enable" value="enable tracking" onclick="startTracking()">
+                <input type="button" id="geo-disable" value="disable tracking" onclick="stopTracking()" disabled>
             </div>
-            <p id="geo-text"></p>
+            <p id="geo-text">tracking disabled</p>
             <div class="options">
-                <input type="button" id="audio-start" value="start listening" onclick="startListening()">
-                <input type="button" id="audio-stop" value="stop listening" onclick="stopListening()" disabled>
+                <input type="button" id="audio-enable" value="enable listening" onclick="startListening()">
+                <input type="button" id="audio-disable" value="disable listening" onclick="stopListening()" disabled>
             </div>
-            <p id="audio-text"></p>
+            <p id="audio-text">listening disabled</p>
             <div class="options">
                 <input type="button" id="reverb-enable" value="enable reverb" onclick="enableReverb()">
                 <input type="button" id="reverb-disable" value="disable reverb" onclick="disableReverb()" disabled>
             </div>
-            <p id="reverb-text"></p>
+            <p id="reverb-text">reverb disabled</p>
+            <div class="options">
+                <label for="input-select">input:</label>
+                <select name="inputs" id="input-select" onchange="inputChanged()">
+                    <option value="">Default</option>
+                </select>
+                <br>
+                <label for="output-select">output:</label>
+                <select name="outputs" id="output-select" onchange="outputChanged()">
+                    <option value="">Default</option>
+                </select>
+                <br>
+                <input type="button" id="update-devices" value="update devices" onclick="updateDevices()">
+            </div>
+            <!-- <p id="device-info">device info</p> -->
         </main>
         <footer>
             
@@ -57,21 +71,21 @@
         // start tracking geolocation
         function startTracking() {
             if (watchID != null) {
-                document.getElementById("geo-text").innerHTML = "tracking already started";
+                document.getElementById("geo-text").innerHTML = "tracking already enabled";
             } else {
-                document.getElementById("geo-text").innerHTML = "tracking started";
+                document.getElementById("geo-text").innerHTML = "tracking enabled";
                 watchID = navigator.geolocation.watchPosition(success, error, {enableHighAccuracy: true});
-                document.getElementById("geo-stop").disabled = false; // enable stop button
-                document.getElementById("geo-start").disabled = true; // disable start button
+                document.getElementById("geo-disable").disabled = false; // enable stop button
+                document.getElementById("geo-enable").disabled = true; // disable start button
             }
         }
         // stop tracking geolocation
         function stopTracking() {
             navigator.geolocation.clearWatch(watchID)
             watchID = null;
-            document.getElementById("geo-text").innerHTML = "tracking stopped";
-            document.getElementById("geo-start").disabled = false; // enable start button
-            document.getElementById("geo-stop").disabled = true; // disable stop button
+            document.getElementById("geo-text").innerHTML = "tracking disabled";
+            document.getElementById("geo-enable").disabled = false; // enable start button
+            document.getElementById("geo-disable").disabled = true; // disable stop button
             // if marker exists, remove it
             if (userMarker) {
                 map.removeLayer(userMarker);
@@ -120,14 +134,75 @@
         let reverb_enabled = false; // reverb state flag
         let stream = null; // user media audio stream
         let source = null; // audio source variable
+        let input_id = null; // selected input deviceId
 
         loadReverb(); // load impulse response file
+
+        // update devices (inputs and outputs)
+        async function updateDevices() {
+            devices = await navigator.mediaDevices.enumerateDevices();
+            devices.forEach((device) => console.log(`kind = ${device.kind} label = ${device.label} deviceId = ${device.deviceId} groupId = ${device.groupId}`));
+            // add to input & output select
+            input_select = document.getElementById("input-select");
+            clearOptions(input_select);
+            output_select = document.getElementById("output-select");
+            clearOptions(output_select);
+            devices.forEach((device) => {
+                if (device.kind =="audioinput") {
+                    addOption(input_select, device.deviceId, device.label);
+                } else if (device.kind =="audiooutput") {
+                    addOption(output_select, device.deviceId, device.label);
+                }
+            });
+        }
+
+        // log device info (capabilities) to console
+        function logDeviceInfo() {
+            tracks = stream.getTracks();
+            tracks.map((t) => console.log(t.getCapabilities()));
+        }
+
+        function clearOptions(select) {
+            for (option in select.options) {
+                select.options.remove(0);
+            }
+        }
+
+        function addOption(select, value, label) {
+            option = document.createElement('option');
+            option.value = value;
+            option.innerHTML = label;
+            select.appendChild(option);
+        }
+
+        async function inputChanged() {
+            input_id = document.getElementById("input-select").value;
+            console.log(`selected input_id: ${input_id}`);
+            try {
+                if (source != null) {
+                    stopListening();
+                }
+                await startListening();
+                logDeviceInfo();
+            } catch (error) {
+                document.getElementById("audio-text").innerHTML = error;
+            }
+        }
+
+        function outputChanged() {
+            output_id = document.getElementById("output-select").value;
+            console.log(`selected output_id: ${output_id}`);
+        }
 
         // start listening to user's microphone
         async function startListening() {
             try {
-                // get user device audio
-                stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                // get user device audio (default input or inputId)
+                if (input_id == null) {
+                    stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                } else {
+                    stream = await navigator.mediaDevices.getUserMedia({audio: {deviceId: {exact: input_id}}});
+                }
                 // set device audio as audio context's source
                 source = audioContext.createMediaStreamSource(stream);
                 // connect source to destination or reverb
@@ -136,9 +211,9 @@
                 } else {
                     source.connect(reverb);
                 }
-                document.getElementById("audio-text").innerHTML = "listening started";
-                document.getElementById("audio-stop").disabled = false; // enable stop button
-                document.getElementById("audio-start").disabled = true; // disable start button
+                document.getElementById("audio-text").innerHTML = "listening enabled";
+                document.getElementById("audio-disable").disabled = false; // enable stop button
+                document.getElementById("audio-enable").disabled = true; // disable start button
             } catch (error) {
                 document.getElementById("audio-text").innerHTML = error;
             }
@@ -152,9 +227,9 @@
                 source.disconnect(audioContext.destination);
             }
             source = null;
-            document.getElementById("audio-text").innerHTML = "listening stopped";
-            document.getElementById("audio-start").disabled = false; // enable start button
-            document.getElementById("audio-stop").disabled = true; // disable stop button
+            document.getElementById("audio-text").innerHTML = "listening disabled";
+            document.getElementById("audio-enable").disabled = false; // enable start button
+            document.getElementById("audio-disable").disabled = true; // disable stop button
         }
 
         // load impulse response file
