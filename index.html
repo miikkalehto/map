@@ -12,7 +12,7 @@
     </head>
     <body>
         <main>
-            <h1>map</h1>
+            <!-- <h1>map</h1> -->
             <div id="map"></div>
             <p id="geo-text">tracking disabled</p>
             <div class="options">
@@ -50,8 +50,7 @@
 
         function appendInfo(text) {
             const time = new Date(Date.now());
-            const timestamp = time.getHours().toString() + ":" + time.getMinutes().toString() + ":" + time.getSeconds().toString() + "." + time.getMilliseconds();
-            console.log(timestamp);
+            const timestamp = time.getHours().toString().padStart(2, "0") + ":" + time.getMinutes().toString().padStart(2, "0") + ":" + time.getSeconds().toString().padStart(2, "0") + "." + time.getMilliseconds().toString().padStart(3, "0");
             document.getElementById("info-text").value += timestamp + " " + text + "\n";
         }
 
