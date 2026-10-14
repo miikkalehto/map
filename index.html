@@ -22,9 +22,6 @@
                 <input type="button" id="audio-enable" value="enable listening" onclick="startListening()">
                 <input type="button" id="audio-disable" value="disable listening" onclick="stopListening()" disabled>
                 <br>
-                <input type="button" id="reverb-enable" value="enable reverb" onclick="enableReverb()">
-                <input type="button" id="reverb-disable" value="disable reverb" onclick="disableReverb()" disabled>
-                <br>
                 <label for="input-select">input:</label>
                 <select name="inputs" id="input-select" onchange="inputChanged()">
                     <option value="">Default</option>
@@ -36,6 +33,14 @@
                 </select>
                 <br>
                 <input type="button" id="refresh-devices" value="refresh devices" onclick="refreshDevices()">
+                <br>
+                <label for="reverb-select">reverb:</label>
+                <select name="reverbs" id="reverb-select" onchange="reverbChanged()">
+                    <option value="0">None</option>
+                    <option value="1">Blockhaus</option>
+                    <option value="2">Coupole</option>
+                    <option value="3">Wiederstrandsnest</option>
+                </select>
                 <br>
                 <textarea id="info-text" rows="8"></textarea>
             </div>
@@ -136,13 +141,30 @@
         // TESTING Web Audio API
 
         let audioContext = new AudioContext(); // audio context variable
-        let reverb = audioContext.createConvolver(); // reverb (convolver)
-        let reverb_enabled = false; // reverb state flag
+        let current_reverb = null; // currently selected reverb
         let stream = null; // user media audio stream
         let source = null; // audio source variable
         let input_id = null; // selected input deviceId
-
-        loadReverb(); // load impulse response file
+        let output_id = null; // selected output deviceId
+        
+        // create reverb nodes
+        let reverb_1 = audioContext.createConvolver();
+        let reverb_2 = audioContext.createConvolver();
+        let reverb_3 = audioContext.createConvolver();
+        // load impulse responses
+        loadReverb(reverb_1, "./res/audio/ir-blockhaus-stereo.wav");
+        loadReverb(reverb_2, "./res/audio/ir-coupole-stereo.wav");
+        loadReverb(reverb_3, "./res/audio/ir-wiederstandsnest-stereo.wav");
+        // connect to output
+        reverb_1.connect(audioContext.destination);
+        reverb_2.connect(audioContext.destination);
+        reverb_3.connect(audioContext.destination);
+        // map to IDs
+        const reverbs = new Map();
+        reverbs.set("0", null);
+        reverbs.set("1", reverb_1);
+        reverbs.set("2", reverb_2);
+        reverbs.set("3", reverb_3);
 
         // update devices (inputs and outputs)
         async function refreshDevices() {
@@ -212,10 +234,10 @@
                 // set device audio as audio context's source
                 source = audioContext.createMediaStreamSource(stream);
                 // connect source to destination or reverb
-                if (!reverb_enabled) {
+                if (current_reverb == null) {
                     source.connect(audioContext.destination);
                 } else {
-                    source.connect(reverb);
+                    source.connect(current_reverb);
                 }
                 appendInfo("listening enabled");
                 document.getElementById("audio-disable").disabled = false; // enable stop button
@@ -227,8 +249,8 @@
 
         // stop listening to user's microphone
         function stopListening() {
-            if (reverb_enabled) {
-                source.disconnect(reverb);
+            if (current_reverb != null) {
+                source.disconnect(current_reverb);
             } else {
                 source.disconnect(audioContext.destination);
             }
@@ -239,35 +261,56 @@
         }
 
         // load impulse response file
-        async function loadReverb() {
-            let response = await fetch("./res/audio/ir-test.wav");
+        async function loadReverb(reverb, path) {
+            let response = await fetch(path);
             let arraybuffer = await response.arrayBuffer();
             reverb.buffer = await audioContext.decodeAudioData(arraybuffer);
         }
         
         // connect reverb between source and destination
-        function enableReverb() {
+        function enableReverb(reverb) {
             if (source != null) {
                 source.disconnect(audioContext.destination);
                 source.connect(reverb);
             }
-            reverb.connect(audioContext.destination);
-            document.getElementById("reverb-enable").disabled = true;
-            document.getElementById("reverb-disable").disabled = false;
-            reverb_enabled = true;
-            appendInfo("reverb enabled");
         }
 
         function disableReverb() {
-            reverb.disconnect(audioContext.destination);
             if (source != null) {
-                source.disconnect(reverb);
+                source.disconnect(current_reverb);
                 source.connect(audioContext.destination);
             }
-            document.getElementById("reverb-enable").disabled = false;
-            document.getElementById("reverb-disable").disabled = true;
-            reverb_enabled = false;
-            appendInfo("reverb disabled");
+        }
+
+        // switch from currently enabled reverb to target reverb
+        function switchReverb(reverb) {
+            if (source != null) {
+                source.disconnect(current_reverb);
+                source.connect(reverb);
+            }
+        }
+
+        function reverbChanged() {
+            let reverb_id = document.getElementById("reverb-select").value;
+            // appendInfo("reverb_id: " + reverb_id);
+            let target_reverb = reverbs.get(reverb_id);
+
+            // return early if no change
+            if (current_reverb == target_reverb) {
+                return;
+            }
+
+            if (current_reverb == null) {
+                enableReverb(target_reverb);
+                appendInfo("reverb enabled");
+            } else if (target_reverb == null) {
+                disableReverb();
+                appendInfo("reverb disabled");
+            } else {
+                switchReverb(target_reverb);
+            }
+
+            current_reverb = target_reverb;
         }
         
         // TESTING map objects
