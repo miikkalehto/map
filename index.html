@@ -266,50 +266,49 @@
             let arraybuffer = await response.arrayBuffer();
             reverb.buffer = await audioContext.decodeAudioData(arraybuffer);
         }
-        
-        // connect reverb between source and destination
-        function enableReverb(reverb) {
-            if (source != null) {
-                source.disconnect(audioContext.destination);
-                source.connect(reverb);
+
+        // connect selected reverb if source exists
+        function connectReverb(reverb) {
+            try {
+                if (source != null) {
+                    // if reverb is currently off, disconnect source from output
+                    if (current_reverb == null) {
+                        source.disconnect(audioContext.destination);
+                    } else { // otherwise disconnect source from current reverb
+                        source.disconnect(current_reverb);
+                    }
+                    // connect source to selected reverb
+                    source.connect(reverb);
+                }
+            } catch (error) {
+                appendInfo(error);
             }
         }
 
-        function disableReverb() {
-            if (source != null) {
-                source.disconnect(current_reverb);
-                source.connect(audioContext.destination);
+        // disconnect reverb if source exists
+        function disconnectReverb() {
+            try {
+                if (source != null && current_reverb != null) {
+                    source.disconnect(current_reverb);
+                    source.connect(audioContext.destination);
+                }
+            } catch (error) {
+                appendInfo(error);
             }
         }
 
-        // switch from currently enabled reverb to target reverb
-        function switchReverb(reverb) {
-            if (source != null) {
-                source.disconnect(current_reverb);
-                source.connect(reverb);
-            }
-        }
-
+        // handle reverb selector change
         function reverbChanged() {
+            // get target reverb
             let reverb_id = document.getElementById("reverb-select").value;
-            // appendInfo("reverb_id: " + reverb_id);
             let target_reverb = reverbs.get(reverb_id);
-
-            // return early if no change
-            if (current_reverb == target_reverb) {
-                return;
-            }
-
-            if (current_reverb == null) {
-                enableReverb(target_reverb);
-                appendInfo("reverb enabled");
-            } else if (target_reverb == null) {
-                disableReverb();
-                appendInfo("reverb disabled");
+            // handle reverb connection / disconnection
+            if (target_reverb == null) {
+                disconnectReverb();
             } else {
-                switchReverb(target_reverb);
+                connectReverb(target_reverb);
             }
-
+            // update current_reverb
             current_reverb = target_reverb;
         }
         
